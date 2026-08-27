@@ -228,6 +228,14 @@
     font-size: 24px;
   }
 
+  #top-btn {
+    position: absolute;
+    top: 148px;
+    left: 12px;
+    z-index: 20;
+    font-size: 24px;
+  }
+
   #speed-controls {
     position: absolute;
     top: 12px;
@@ -287,6 +295,7 @@
   <div id="prompter-screen" class="hidden">
     <button id="back-btn">←</button>
     <button id="restart-btn" class="ctrl-btn">⟲</button>
+    <button id="top-btn" class="ctrl-btn">⤒</button>
     <div id="speed-controls">
       <button id="speed-down" class="ctrl-btn">－</button>
       <input type="range" id="speed-slider" min="0.5" max="5" step="0.1" value="1">
@@ -571,6 +580,19 @@ feeling a real connection to this place.`;
 
   restartBtn.addEventListener('click', function () {
     restart();
+  });
+
+  document.getElementById('top-btn').addEventListener('click', function () {
+    // カウントダウンなしで先頭に戻って一時停止（中央タップで再開）
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+    countdownOverlay.classList.add('hidden');
+    pause();
+    state.scrollY = 0;
+    scriptContent.style.transform = 'translateY(0)';
+    updateMarkerHighlight();
+    updateProgress();
+    showPauseIndicator();
   });
 
   nudgeBackBtn.addEventListener('click', function () {

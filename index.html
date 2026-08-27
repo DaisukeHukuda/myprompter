@@ -488,9 +488,7 @@ feeling a real connection to this place.`;
     showPrompter();
     if (text.trim() === '') {
       scriptContent.innerHTML = '';
-      lineEls = [];
-      lineOffsets = [];
-      currentLineIndex = -1;
+      cacheLineOffsets();
       emptyMessage.classList.remove('hidden');
       updateProgress();
     } else {
@@ -506,6 +504,7 @@ feeling a real connection to this place.`;
     state.fontSize = parseInt(fontSizeInput.value, 10);
     fontSizeValue.textContent = state.fontSize + 'px';
     scriptContent.style.fontSize = state.fontSize + 'px';
+    cacheLineOffsets();  // 文字サイズ変更で行の高さ・offsetTopが変わるためキャッシュを作り直す
   });
 
   backBtn.addEventListener('click', function () {

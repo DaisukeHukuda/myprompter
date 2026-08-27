@@ -37,6 +37,26 @@
     font-size: 20px;
   }
 
+  #doc-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  #doc-row select {
+    flex: 1;
+    min-height: 44px;
+    font-size: 16px;
+    min-width: 0;
+  }
+
+  #doc-row button {
+    min-height: 44px;
+    padding: 0 14px;
+    font-size: 15px;
+    white-space: nowrap;
+  }
+
   #script-input {
     flex: 1;
     width: 100%;
@@ -282,6 +302,11 @@
 
   <div id="edit-screen">
     <h1>myprompter</h1>
+    <div id="doc-row">
+      <select id="doc-select"></select>
+      <button id="doc-new">＋ 新規</button>
+      <button id="doc-delete">🗑 削除</button>
+    </div>
     <textarea id="script-input"></textarea>
     <button id="start-btn">スタート ▶</button>
     <div id="font-size-row">
@@ -363,6 +388,9 @@ feeling a real connection to this place.`;
   const progressDisplay = document.getElementById('progress-display');
   const fontSizeInput = document.getElementById('font-size-input');
   const fontSizeValue = document.getElementById('font-size-value');
+  const docSelect = document.getElementById('doc-select');
+  const docNewBtn = document.getElementById('doc-new');
+  const docDeleteBtn = document.getElementById('doc-delete');
 
   let countdownTimer = null;
 
@@ -401,7 +429,23 @@ feeling a real connection to this place.`;
     if (!currentDoc()) currentDocId = sortedDocs()[0].id;
     saveDocs();
   }
-  function renderDocSelect() {}  // Task 2で本実装に差し替え
+  function renderDocSelect() {
+    docSelect.innerHTML = '';
+    sortedDocs().forEach(function (doc) {
+      const opt = document.createElement('option');
+      opt.value = doc.id;
+      opt.textContent = docTitle(doc);
+      docSelect.appendChild(opt);
+    });
+    docSelect.value = currentDocId;
+  }
+  function switchDoc(id) {
+    flushScriptSave();
+    currentDocId = id;
+    scriptInput.value = currentDoc().text;
+    saveDocs();
+    renderDocSelect();
+  }
 
   function saveScript() {
     const doc = currentDoc();
@@ -436,6 +480,29 @@ feeling a real connection to this place.`;
   function flushScriptSave() {  // 切替・新規・削除の直前に、保留中の編集を確実に書き込む
     if (scriptSaveTimer !== null) { clearTimeout(scriptSaveTimer); scriptSaveTimer = null; saveScript(); }
   }
+
+  docSelect.addEventListener('change', function () { switchDoc(docSelect.value); });
+  docNewBtn.addEventListener('click', function () {
+    flushScriptSave();
+    const doc = { id: genId(), text: '', updatedAt: Date.now() };
+    docs.push(doc);
+    currentDocId = doc.id;
+    scriptInput.value = '';
+    saveDocs();
+    renderDocSelect();
+    scriptInput.focus();
+  });
+  docDeleteBtn.addEventListener('click', function () {
+    const doc = currentDoc();
+    if (!doc) return;
+    if (!confirm('「' + docTitle(doc) + '」を削除しますか？')) return;
+    docs = docs.filter(function (d) { return d.id !== doc.id; });
+    if (docs.length === 0) docs.push({ id: genId(), text: '', updatedAt: Date.now() });
+    currentDocId = sortedDocs()[0].id;
+    scriptInput.value = currentDoc().text;
+    saveDocs();
+    renderDocSelect();
+  });
 
   // マーカー判定用：行のoffsetTopをrenderScript/文字サイズ変更のたびにキャッシュし、
   // 毎フレームのレイアウト読み取りを避ける

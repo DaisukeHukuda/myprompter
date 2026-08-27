@@ -56,6 +56,23 @@
     text-align: center;
   }
 
+  #font-size-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    font-size: 14px;
+  }
+
+  #font-size-input {
+    flex: 1;
+  }
+
+  #font-size-value {
+    min-width: 48px;
+    text-align: right;
+  }
+
   /* プロンプター画面 */
   #prompter-screen {
     position: fixed;
@@ -97,6 +114,37 @@
 
   #script-content .line.blank {
     height: 1.6em;
+  }
+
+  #script-content .line {
+    opacity: 0.75;
+  }
+
+  #script-content .line.current {
+    opacity: 1;
+    font-weight: 600;
+  }
+
+  #marker-line {
+    position: absolute;
+    top: 33%;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.35);
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  #progress-display {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 5;
+    color: #fff;
+    font-size: 14px;
+    opacity: 0.6;
+    pointer-events: none;
   }
 
   #empty-message {
@@ -209,6 +257,11 @@
     <h1>myprompter</h1>
     <textarea id="script-input"></textarea>
     <button id="start-btn">スタート ▶</button>
+    <div id="font-size-row">
+      <label for="font-size-input">文字サイズ</label>
+      <input type="range" id="font-size-input" min="24" max="96" step="4" value="48">
+      <span id="font-size-value">48px</span>
+    </div>
     <p id="edit-note">録画中に画面が消える場合は、端末の自動ロック設定を長めにしてください</p>
   </div>
 
@@ -229,6 +282,8 @@
       <div id="empty-message" class="hidden">原稿を入力してください</div>
     </div>
     <div id="pause-zone"></div>
+    <div id="marker-line"></div>
+    <div id="progress-display"></div>
     <div id="pause-indicator" class="hidden">⏸ 一時停止中（タップで再開）</div>
     <div id="countdown-overlay" class="hidden"></div>
   </div>
@@ -274,12 +329,29 @@ feeling a real connection to this place.`;
   const speedValue = document.getElementById('speed-value');
   const nudgeBackBtn = document.getElementById('nudge-back');
   const nudgeForwardBtn = document.getElementById('nudge-forward');
+  const markerLine = document.getElementById('marker-line');
+  const progressDisplay = document.getElementById('progress-display');
+  const fontSizeInput = document.getElementById('font-size-input');
+  const fontSizeValue = document.getElementById('font-size-value');
 
   let countdownTimer = null;
 
   const state = { speed: 1.0, fontSize: 48, scrollY: 0, playing: false };
 
   scriptInput.value = DEFAULT_SCRIPT;
+
+  // マーカー判定用：行のoffsetTopをrenderScript/文字サイズ変更のたびにキャッシュし、
+  // 毎フレームのレイアウト読み取りを避ける
+  let lineEls = [];
+  let lineOffsets = [];
+  let currentLineIndex = -1;
+  let lastProgressTs = -Infinity;
+
+  function cacheLineOffsets() {
+    lineEls = Array.prototype.slice.call(scriptContent.querySelectorAll('.line'));
+    lineOffsets = lineEls.map(function (el) { return el.offsetTop; });
+    currentLineIndex = -1;
+  }
 
   function showPauseIndicator() { pauseIndicator.classList.remove('hidden'); }
   function hidePauseIndicator() { pauseIndicator.classList.add('hidden'); }
@@ -289,11 +361,39 @@ feeling a real connection to this place.`;
   function maxScroll() {
     return Math.max(0, scriptContent.scrollHeight - scrollContainer.clientHeight);
   }
+  function updateMarkerHighlight() {  // scrollYと各行のoffsetTop（キャッシュ済み）だけで判定。elementFromPointは使わない
+    if (lineEls.length === 0) return;
+    const markerContentY = state.scrollY + scrollContainer.clientHeight * 0.33;
+    let lo = 0, hi = lineEls.length - 1, idx = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (lineOffsets[mid] <= markerContentY) { idx = mid; lo = mid + 1; } else { hi = mid - 1; }
+    }
+    if (idx === currentLineIndex) return;
+    if (currentLineIndex !== -1 && lineEls[currentLineIndex]) lineEls[currentLineIndex].classList.remove('current');
+    lineEls[idx].classList.add('current');
+    currentLineIndex = idx;
+  }
+
+  function updateProgress() {
+    const total = maxScroll();
+    const remainingSec = Math.max(0, (total - state.scrollY) / pxPerSec());
+    const percent = total === 0 ? 100 : Math.round(state.scrollY / total * 100);
+    const mm = Math.floor(remainingSec / 60);
+    const ss = String(Math.floor(remainingSec % 60)).padStart(2, '0');
+    progressDisplay.textContent = `残り ${mm}:${ss} ／ ${percent}%`;
+  }
+
   function tick(ts) {
     if (!state.playing) return;
     if (lastTs !== null) {
       state.scrollY = Math.min(state.scrollY + pxPerSec() * (ts - lastTs) / 1000, maxScroll());
       scriptContent.style.transform = `translateY(${-state.scrollY}px)`;
+      updateMarkerHighlight();
+      if (ts - lastProgressTs >= 500) {
+        updateProgress();
+        lastProgressTs = ts;
+      }
       if (state.scrollY >= maxScroll()) { pause(); showPauseIndicator(); }  // 末尾到達で自動停止
     }
     lastTs = ts;
@@ -311,16 +411,21 @@ feeling a real connection to this place.`;
   function changeSpeed(delta) {  // setSpeedと表示更新をまとめて行う（キーボード操作もここを通す）
     setSpeed(state.speed + delta);
     updateSpeedDisplay();
+    updateProgress();
   }
   function nudge(lines) {  // 戻る=負、進む=正。1行 = fontSize*1.6px
     state.scrollY = Math.min(maxScroll(), Math.max(0, state.scrollY + lines * state.fontSize * 1.6));
     scriptContent.style.transform = `translateY(${-state.scrollY}px)`;
+    updateMarkerHighlight();
+    updateProgress();
   }
   function restart() {
     pause();
     hidePauseIndicator();
     state.scrollY = 0;
     scriptContent.style.transform = 'translateY(0)';
+    updateMarkerHighlight();
+    updateProgress();
     startCountdown();
   }
 
@@ -355,6 +460,7 @@ feeling a real connection to this place.`;
       }
       scriptContent.appendChild(div);
     });
+    cacheLineOffsets();
   }
 
   function startCountdown() {
@@ -382,12 +488,24 @@ feeling a real connection to this place.`;
     showPrompter();
     if (text.trim() === '') {
       scriptContent.innerHTML = '';
+      lineEls = [];
+      lineOffsets = [];
+      currentLineIndex = -1;
       emptyMessage.classList.remove('hidden');
+      updateProgress();
     } else {
       emptyMessage.classList.add('hidden');
       renderScript(text);
+      updateMarkerHighlight();
+      updateProgress();
       startCountdown();
     }
+  });
+
+  fontSizeInput.addEventListener('input', function () {
+    state.fontSize = parseInt(fontSizeInput.value, 10);
+    fontSizeValue.textContent = state.fontSize + 'px';
+    scriptContent.style.fontSize = state.fontSize + 'px';
   });
 
   backBtn.addEventListener('click', function () {

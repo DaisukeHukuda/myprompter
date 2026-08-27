@@ -368,14 +368,51 @@ feeling a real connection to this place.`;
 
   const state = { speed: 1.0, fontSize: 48, scrollY: 0, playing: false };
 
-  const LS = { script: 'myprompter.script', speed: 'myprompter.speed', fontSize: 'myprompter.fontSize' };
+  const LS = { script: 'myprompter.script', speed: 'myprompter.speed', fontSize: 'myprompter.fontSize', docs: 'myprompter.docs', currentDocId: 'myprompter.currentDocId' };
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* 保存不可環境では黙ってスキップ */ } }
-  function saveScript() { lsSet(LS.script, scriptInput.value); }
+
+  // ---- 原稿リスト（複数原稿の保存・切替） ----
+  let docs = [];          // [{id, text, updatedAt}]
+  let currentDocId = null;
+
+  function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function currentDoc() { return docs.find(function (d) { return d.id === currentDocId; }); }
+  function sortedDocs() { return docs.slice().sort(function (a, b) { return b.updatedAt - a.updatedAt; }); }
+  function docTitle(doc) {
+    const first = (doc.text.split('\n').find(function (l) { return l.trim() !== ''; }) || '').trim();
+    const name = first === '' ? '（無題）' : first.slice(0, 20);
+    const d = new Date(doc.updatedAt);
+    return name + ' — ' + (d.getMonth() + 1) + '/' + d.getDate();
+  }
+  function saveDocs() { lsSet(LS.docs, JSON.stringify(docs)); lsSet(LS.currentDocId, currentDocId); }
+  function loadDocs() {
+    let parsed = null;
+    try { parsed = JSON.parse(lsGet(LS.docs)); } catch (e) { parsed = null; }
+    if (Array.isArray(parsed) && parsed.length > 0 &&
+        parsed.every(function (d) { return d && typeof d.id === 'string' && typeof d.text === 'string' && typeof d.updatedAt === 'number'; })) {
+      docs = parsed;
+    } else {
+      const legacy = lsGet(LS.script);  // 旧単一原稿からの移行
+      docs = [{ id: genId(), text: (legacy !== null && legacy !== '') ? legacy : DEFAULT_SCRIPT, updatedAt: Date.now() }];
+      try { localStorage.removeItem(LS.script); } catch (e) {}
+    }
+    currentDocId = lsGet(LS.currentDocId);
+    if (!currentDoc()) currentDocId = sortedDocs()[0].id;
+    saveDocs();
+  }
+  function renderDocSelect() {}  // Task 2で本実装に差し替え
+
+  function saveScript() {
+    const doc = currentDoc();
+    if (!doc) return;
+    doc.text = scriptInput.value;
+    doc.updatedAt = Date.now();
+    saveDocs();
+    renderDocSelect();  // タイトル・並び順が変わるため
+  }
   function saveSettings() { lsSet(LS.speed, String(state.speed)); lsSet(LS.fontSize, String(state.fontSize)); }
   function loadSettings() {
-    const script = lsGet(LS.script);
-    scriptInput.value = (script !== null && script !== '') ? script : DEFAULT_SCRIPT;
     const speed = parseFloat(lsGet(LS.speed));
     if (!isNaN(speed)) state.speed = Math.min(5.0, Math.max(0.5, speed));
     const fs = parseInt(lsGet(LS.fontSize), 10);
@@ -383,6 +420,9 @@ feeling a real connection to this place.`;
   }
 
   loadSettings();
+  loadDocs();
+  scriptInput.value = currentDoc().text;
+  renderDocSelect();
   fontSizeInput.value = state.fontSize;
   fontSizeValue.textContent = state.fontSize + 'px';
   scriptContent.style.fontSize = state.fontSize + 'px';
@@ -391,8 +431,11 @@ feeling a real connection to this place.`;
   let scriptSaveTimer = null;
   scriptInput.addEventListener('input', function () {
     clearTimeout(scriptSaveTimer);
-    scriptSaveTimer = setTimeout(saveScript, 300);
+    scriptSaveTimer = setTimeout(function () { scriptSaveTimer = null; saveScript(); }, 300);
   });
+  function flushScriptSave() {  // 切替・新規・削除の直前に、保留中の編集を確実に書き込む
+    if (scriptSaveTimer !== null) { clearTimeout(scriptSaveTimer); scriptSaveTimer = null; saveScript(); }
+  }
 
   // マーカー判定用：行のoffsetTopをrenderScript/文字サイズ変更のたびにキャッシュし、
   // 毎フレームのレイアウト読み取りを避ける

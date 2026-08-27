@@ -145,6 +145,62 @@
     padding: 6px 10px;
     border-radius: 6px;
   }
+
+  /* 操作ボタン共通 */
+  .ctrl-btn {
+    min-width: 60px;
+    min-height: 60px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+
+  #restart-btn {
+    position: absolute;
+    top: 64px;
+    left: 12px;
+    z-index: 20;
+    font-size: 24px;
+  }
+
+  #speed-controls {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  #speed-value {
+    min-width: 60px;
+    text-align: center;
+    color: #fff;
+    font-size: 18px;
+    user-select: none;
+  }
+
+  #nudge-controls {
+    position: absolute;
+    top: 50%;
+    left: 12px;
+    transform: translateY(-50%);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
 </style>
 </head>
 <body>
@@ -158,6 +214,16 @@
 
   <div id="prompter-screen" class="hidden">
     <button id="back-btn">←</button>
+    <button id="restart-btn" class="ctrl-btn">⟲</button>
+    <div id="speed-controls">
+      <button id="speed-up" class="ctrl-btn">＋</button>
+      <div id="speed-value">1.0x</div>
+      <button id="speed-down" class="ctrl-btn">－</button>
+    </div>
+    <div id="nudge-controls">
+      <button id="nudge-back" class="ctrl-btn">▲</button>
+      <button id="nudge-forward" class="ctrl-btn">▼</button>
+    </div>
     <div id="scroll-container">
       <div id="script-content"></div>
       <div id="empty-message" class="hidden">原稿を入力してください</div>
@@ -202,6 +268,12 @@ feeling a real connection to this place.`;
   const scrollContainer = document.getElementById('scroll-container');
   const pauseZone = document.getElementById('pause-zone');
   const pauseIndicator = document.getElementById('pause-indicator');
+  const restartBtn = document.getElementById('restart-btn');
+  const speedUpBtn = document.getElementById('speed-up');
+  const speedDownBtn = document.getElementById('speed-down');
+  const speedValue = document.getElementById('speed-value');
+  const nudgeBackBtn = document.getElementById('nudge-back');
+  const nudgeForwardBtn = document.getElementById('nudge-forward');
 
   let countdownTimer = null;
 
@@ -235,6 +307,11 @@ feeling a real connection to this place.`;
     else { play(); hidePauseIndicator(); }
   }
   function setSpeed(v) { state.speed = Math.min(3.0, Math.max(0.5, Math.round(v * 10) / 10)); }
+  function updateSpeedDisplay() { speedValue.textContent = state.speed.toFixed(1) + 'x'; }
+  function changeSpeed(delta) {  // setSpeedと表示更新をまとめて行う（キーボード操作もここを通す）
+    setSpeed(state.speed + delta);
+    updateSpeedDisplay();
+  }
   function nudge(lines) {  // 戻る=負、進む=正。1行 = fontSize*1.6px
     state.scrollY = Math.min(maxScroll(), Math.max(0, state.scrollY + lines * state.fontSize * 1.6));
     scriptContent.style.transform = `translateY(${-state.scrollY}px)`;
@@ -321,6 +398,43 @@ feeling a real connection to this place.`;
     togglePlay();
   });
 
+  restartBtn.addEventListener('click', function () {
+    restart();
+  });
+
+  nudgeBackBtn.addEventListener('click', function () {
+    nudge(-3);
+  });
+
+  nudgeForwardBtn.addEventListener('click', function () {
+    nudge(3);
+  });
+
+  // 長押しで連続変化するボタンの共通処理（250ms後から100ms間隔でfnを繰り返す）
+  function bindHoldRepeat(el, fn) {
+    let holdTimeout = null;
+    let holdInterval = null;
+    function clearHold() {
+      clearTimeout(holdTimeout);
+      clearInterval(holdInterval);
+      holdTimeout = null;
+      holdInterval = null;
+    }
+    el.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      fn();
+      holdTimeout = setTimeout(function () {
+        holdInterval = setInterval(fn, 100);
+      }, 250);
+    });
+    el.addEventListener('pointerup', clearHold);
+    el.addEventListener('pointerleave', clearHold);
+    el.addEventListener('pointercancel', clearHold);
+  }
+
+  bindHoldRepeat(speedUpBtn, function () { changeSpeed(0.1); });
+  bindHoldRepeat(speedDownBtn, function () { changeSpeed(-0.1); });
+
   document.addEventListener('keydown', function (e) {
     if (prompterScreen.classList.contains('hidden')) return;
     if (e.code === 'Space') {
@@ -328,15 +442,17 @@ feeling a real connection to this place.`;
       togglePlay();
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setSpeed(state.speed + 0.1);
+      changeSpeed(0.1);
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSpeed(state.speed - 0.1);
+      changeSpeed(-0.1);
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
       restart();
     }
   });
+
+  updateSpeedDisplay();
 </script>
 
 </body>

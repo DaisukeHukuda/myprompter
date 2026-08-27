@@ -422,6 +422,7 @@ feeling a real connection to this place.`;
     }
     el.addEventListener('pointerdown', function (e) {
       e.preventDefault();
+      clearHold();  // 同一ボタンへの多重pointerdown（2本指タップ等）でタイマーがリークしないよう先にクリア
       fn();
       holdTimeout = setTimeout(function () {
         holdInterval = setInterval(fn, 100);

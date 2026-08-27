@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>myprompter</title>
+<style>
+  * {
+    box-sizing: border-box;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: -apple-system, "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  }
+
+  .hidden {
+    display: none !important;
+  }
+
+  /* 編集画面 */
+  #edit-screen {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 16px;
+  }
+
+  #edit-screen h1 {
+    margin: 0 0 12px;
+    font-size: 20px;
+  }
+
+  #script-input {
+    flex: 1;
+    width: 100%;
+    font-size: 16px;
+    line-height: 1.5;
+    padding: 12px;
+    resize: none;
+  }
+
+  #start-btn {
+    margin-top: 12px;
+    height: 64px;
+    font-size: 20px;
+    font-weight: bold;
+  }
+
+  #edit-note {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #666;
+    text-align: center;
+  }
+
+  /* プロンプター画面 */
+  #prompter-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+  }
+
+  #back-btn {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 20;
+    height: 44px;
+    min-width: 44px;
+    font-size: 20px;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+  }
+
+  #scroll-container {
+    overflow: hidden;
+    height: 100%;
+  }
+
+  #script-content {
+    color: #fff;
+    font-size: 48px;
+    line-height: 1.6;
+    padding-left: 8%;
+    padding-right: 8%;
+    padding-top: 40vh;
+    padding-bottom: 70vh;
+  }
+
+  #script-content .line.blank {
+    height: 1.6em;
+  }
+
+  #empty-message {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    transform: translateY(-50%);
+    color: #fff;
+    font-size: 40px;
+    text-align: center;
+  }
+
+  #countdown-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30vh;
+    z-index: 10;
+  }
+</style>
+</head>
+<body>
+
+  <div id="edit-screen">
+    <h1>myprompter</h1>
+    <textarea id="script-input"></textarea>
+    <button id="start-btn">スタート ▶</button>
+    <p id="edit-note">録画中に画面が消える場合は、端末の自動ロック設定を長めにしてください</p>
+  </div>
+
+  <div id="prompter-screen" class="hidden">
+    <button id="back-btn">←</button>
+    <div id="scroll-container">
+      <div id="script-content"></div>
+      <div id="empty-message" class="hidden">原稿を入力してください</div>
+    </div>
+    <div id="countdown-overlay"></div>
+  </div>
+
+<script>
+  const DEFAULT_SCRIPT = `Hi, I'm Daisuke.
+Welcome to Oku-Nikko.
+
+I'm the founder of Sup! Sup!,
+and I guide guests here in both English and Chinese.
+
+One of my favorite ways to show you this area
+is Paddle Boarding on Lake Chuzenji.
+
+For me, Paddle Boarding is not just about being on the water.
+It gives you a chance to slow down, look around,
+and really feel the nature of Oku-Nikko.
+
+While we paddle, I love sharing stories about
+how this landscape was shaped by volcanic activity,
+Also the local history and culture.
+
+My goal is to help you enjoy the scenery,
+but also understand why this place is so special.
+
+I hope you leave Oku-Nikko
+feeling a real connection to this place.`;
+
+  const editScreen = document.getElementById('edit-screen');
+  const prompterScreen = document.getElementById('prompter-screen');
+  const scriptInput = document.getElementById('script-input');
+  const startBtn = document.getElementById('start-btn');
+  const backBtn = document.getElementById('back-btn');
+  const scriptContent = document.getElementById('script-content');
+  const emptyMessage = document.getElementById('empty-message');
+  const countdownOverlay = document.getElementById('countdown-overlay');
+
+  scriptInput.value = DEFAULT_SCRIPT;
+
+  function showEdit() {
+    prompterScreen.classList.add('hidden');
+    editScreen.classList.remove('hidden');
+  }
+
+  function showPrompter() {
+    editScreen.classList.add('hidden');
+    prompterScreen.classList.remove('hidden');
+  }
+
+  function renderScript(text) {
+    scriptContent.innerHTML = '';
+    const lines = text.split('\n');
+    lines.forEach(function (line) {
+      const div = document.createElement('div');
+      if (line.trim() === '') {
+        div.className = 'line blank';
+        div.innerHTML = '&nbsp;';
+      } else {
+        div.className = 'line';
+        div.textContent = line;
+      }
+      scriptContent.appendChild(div);
+    });
+  }
+
+  function startCountdown() {
+    const counts = ['3', '2', '1'];
+    let i = 0;
+    countdownOverlay.textContent = counts[i];
+    countdownOverlay.classList.remove('hidden');
+    const timer = setInterval(function () {
+      i++;
+      if (i < counts.length) {
+        countdownOverlay.textContent = counts[i];
+      } else {
+        clearInterval(timer);
+        countdownOverlay.classList.add('hidden');
+      }
+    }, 1000);
+  }
+
+  startBtn.addEventListener('click', function () {
+    const text = scriptInput.value;
+    showPrompter();
+    if (text.trim() === '') {
+      scriptContent.innerHTML = '';
+      emptyMessage.classList.remove('hidden');
+    } else {
+      emptyMessage.classList.add('hidden');
+      renderScript(text);
+      startCountdown();
+    }
+  });
+
+  backBtn.addEventListener('click', function () {
+    showEdit();
+  });
+</script>
+
+</body>
+</html>

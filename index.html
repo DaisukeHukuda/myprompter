@@ -146,24 +146,12 @@
   }
 
   #script-content .line {
-    opacity: 1;
+    opacity: 0.55;
   }
 
-  /* 流れに合わせた明るさのグラデーション：目印ライン（33%）が最も明るく、
-     上下に離れるほど徐々に暗くなる。固定の暗幕を文字の上に重ねる方式なので、
-     スクロールに完全連動してなめらかに変化する */
-  #fade-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(to bottom,
-      rgba(0, 0, 0, 0.88) 0%,
-      rgba(0, 0, 0, 0.0) 33%,
-      rgba(0, 0, 0, 0.7) 100%);
-    pointer-events: none;
-    z-index: 4;
+  #script-content .line.current {
+    /* 太字にすると文字幅が変わって折り返しが動くため、明るさの差だけで現在行を示す */
+    opacity: 1;
   }
 
   #marker-line {
@@ -347,7 +335,6 @@
       <div id="script-content"></div>
       <div id="empty-message" class="hidden">原稿を入力してください</div>
     </div>
-    <div id="fade-overlay"></div>
     <div id="pause-zone"></div>
     <div id="marker-line"></div>
     <div id="progress-display"></div>
@@ -517,7 +504,19 @@ feeling a real connection to this place.`;
     renderDocSelect();
   });
 
+  // マーカー判定用：行のoffsetTopをrenderScript/文字サイズ変更のたびにキャッシュし、
+  // 毎フレームのレイアウト読み取りを避ける
+  let lineEls = [];
+  let lineOffsets = [];
+  let currentLineIndex = -1;
   let lastProgressTs = -Infinity;
+
+  function cacheLineOffsets() {
+    lineEls = Array.prototype.slice.call(scriptContent.querySelectorAll('.line'));
+    lineEls.forEach(function (el) { el.classList.remove('current'); });
+    lineOffsets = lineEls.map(function (el) { return el.offsetTop; });
+    currentLineIndex = -1;
+  }
 
   function showPauseIndicator() { pauseIndicator.classList.remove('hidden'); }
   function hidePauseIndicator() { pauseIndicator.classList.add('hidden'); }
@@ -526,6 +525,19 @@ feeling a real connection to this place.`;
   function pxPerSec() { return (state.fontSize * 1.3 / 6) * state.speed; }
   function maxScroll() {
     return Math.max(0, scriptContent.scrollHeight - scrollContainer.clientHeight);
+  }
+  function updateMarkerHighlight() {  // scrollYと各行のoffsetTop（キャッシュ済み）だけで判定。elementFromPointは使わない
+    if (lineEls.length === 0) return;
+    const markerContentY = state.scrollY + scrollContainer.clientHeight * 0.33;
+    let lo = 0, hi = lineEls.length - 1, idx = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (lineOffsets[mid] <= markerContentY) { idx = mid; lo = mid + 1; } else { hi = mid - 1; }
+    }
+    if (idx === currentLineIndex) return;
+    if (currentLineIndex !== -1 && lineEls[currentLineIndex]) lineEls[currentLineIndex].classList.remove('current');
+    lineEls[idx].classList.add('current');
+    currentLineIndex = idx;
   }
 
   function updateProgress() {
@@ -542,6 +554,7 @@ feeling a real connection to this place.`;
     if (lastTs !== null) {
       state.scrollY = Math.min(state.scrollY + pxPerSec() * (ts - lastTs) / 1000, maxScroll());
       scriptContent.style.transform = `translateY(${-state.scrollY}px)`;
+      updateMarkerHighlight();
       if (ts - lastProgressTs >= 500) {
         updateProgress();
         lastProgressTs = ts;
@@ -573,6 +586,7 @@ feeling a real connection to this place.`;
   function nudge(lines) {  // 戻る=負、進む=正。1行 = fontSize*1.3px
     state.scrollY = Math.min(maxScroll(), Math.max(0, state.scrollY + lines * state.fontSize * 1.3));
     scriptContent.style.transform = `translateY(${-state.scrollY}px)`;
+    updateMarkerHighlight();
     updateProgress();
   }
   function restart() {
@@ -580,6 +594,7 @@ feeling a real connection to this place.`;
     hidePauseIndicator();
     state.scrollY = 0;
     scriptContent.style.transform = 'translateY(0)';
+    updateMarkerHighlight();
     updateProgress();
     startCountdown();
   }
@@ -617,6 +632,7 @@ feeling a real connection to this place.`;
       }
       scriptContent.appendChild(div);
     });
+    cacheLineOffsets();
   }
 
   function startCountdown() {
@@ -644,11 +660,13 @@ feeling a real connection to this place.`;
     showPrompter();
     if (text.trim() === '') {
       scriptContent.innerHTML = '';
+      cacheLineOffsets();
       emptyMessage.classList.remove('hidden');
       updateProgress();
     } else {
       emptyMessage.classList.add('hidden');
       renderScript(text);
+      updateMarkerHighlight();
       updateProgress();
       startCountdown();
     }
@@ -658,6 +676,7 @@ feeling a real connection to this place.`;
     state.fontSize = parseInt(fontSizeInput.value, 10);
     fontSizeValue.textContent = state.fontSize + 'px';
     scriptContent.style.fontSize = state.fontSize + 'px';
+    cacheLineOffsets();  // 文字サイズ変更で行の高さ・offsetTopが変わるためキャッシュを作り直す
     saveSettings();
   });
 
@@ -681,6 +700,7 @@ feeling a real connection to this place.`;
     pause();
     state.scrollY = 0;
     scriptContent.style.transform = 'translateY(0)';
+    updateMarkerHighlight();
     updateProgress();
     showPauseIndicator();
   });
@@ -768,6 +788,8 @@ feeling a real connection to this place.`;
     if (prompterScreen.classList.contains('hidden')) return;
     state.scrollY = Math.min(state.scrollY, maxScroll());
     scriptContent.style.transform = `translateY(${-state.scrollY}px)`;
+    cacheLineOffsets();
+    updateMarkerHighlight();
     updateProgress();
   });
 </script>

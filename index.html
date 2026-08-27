@@ -608,7 +608,16 @@ feeling a real connection to this place.`;
   let wakeLock = null;
   async function acquireWakeLock() {
     try {
-      if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+      if ('wakeLock' in navigator) {
+        const sentinel = await navigator.wakeLock.request('screen');
+        // request解決前にshowEdit()が走っていた場合、このSentinelを保持せず即解放する
+        // （そうしないとwakeLockに代入され、編集画面表示中もロックが保持され続ける）
+        if (prompterScreen.classList.contains('hidden')) {
+          sentinel.release().catch(() => {});
+        } else {
+          wakeLock = sentinel;
+        }
+      }
     } catch (e) { /* 非対応・拒否時は何もしない */ }
   }
   function releaseWakeLock() { if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; } }
@@ -616,7 +625,7 @@ feeling a real connection to this place.`;
     if (document.visibilityState === 'visible' && !prompterScreen.classList.contains('hidden')) acquireWakeLock();
   });
 
-  document.addEventListener('dblclick', function (e) {
+  prompterScreen.addEventListener('dblclick', function (e) {
     e.preventDefault();
   });
 

@@ -91,6 +91,7 @@
   }
 
   #back-btn {
+    /* 誤タップで録画中断になるため、あえて小さめ（計画の60px基準の意図的例外） */
     position: absolute;
     top: 12px;
     left: 12px;
@@ -220,7 +221,7 @@
 
   #restart-btn {
     position: absolute;
-    top: 64px;
+    top: 76px;
     left: 12px;
     z-index: 20;
     font-size: 24px;
@@ -380,6 +381,7 @@ feeling a real connection to this place.`;
 
   function cacheLineOffsets() {
     lineEls = Array.prototype.slice.call(scriptContent.querySelectorAll('.line'));
+    lineEls.forEach(function (el) { el.classList.remove('current'); });
     lineOffsets = lineEls.map(function (el) { return el.offsetTop; });
     currentLineIndex = -1;
   }

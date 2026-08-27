@@ -141,7 +141,7 @@
       <div id="script-content"></div>
       <div id="empty-message" class="hidden">原稿を入力してください</div>
     </div>
-    <div id="countdown-overlay"></div>
+    <div id="countdown-overlay" class="hidden"></div>
   </div>
 
 <script>
@@ -177,9 +177,14 @@ feeling a real connection to this place.`;
   const emptyMessage = document.getElementById('empty-message');
   const countdownOverlay = document.getElementById('countdown-overlay');
 
+  let countdownTimer = null;
+
   scriptInput.value = DEFAULT_SCRIPT;
 
   function showEdit() {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+    countdownOverlay.classList.add('hidden');
     prompterScreen.classList.add('hidden');
     editScreen.classList.remove('hidden');
   }
@@ -206,16 +211,18 @@ feeling a real connection to this place.`;
   }
 
   function startCountdown() {
+    clearInterval(countdownTimer);
     const counts = ['3', '2', '1'];
     let i = 0;
     countdownOverlay.textContent = counts[i];
     countdownOverlay.classList.remove('hidden');
-    const timer = setInterval(function () {
+    countdownTimer = setInterval(function () {
       i++;
       if (i < counts.length) {
         countdownOverlay.textContent = counts[i];
       } else {
-        clearInterval(timer);
+        clearInterval(countdownTimer);
+        countdownTimer = null;
         countdownOverlay.classList.add('hidden');
       }
     }, 1000);

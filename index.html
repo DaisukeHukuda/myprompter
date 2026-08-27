@@ -230,6 +230,7 @@ feeling a real connection to this place.`;
   function play()  { if (state.playing) return; state.playing = true; lastTs = null; requestAnimationFrame(tick); }
   function pause() { state.playing = false; }
   function togglePlay() {
+    if (countdownTimer !== null) return;  // カウントダウン中は無視（オーバーレイの裏で再生が始まるのを防ぐ）
     if (state.playing) { pause(); showPauseIndicator(); }
     else { play(); hidePauseIndicator(); }
   }

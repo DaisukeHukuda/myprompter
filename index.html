@@ -16,6 +16,10 @@
     font-family: -apple-system, "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
   }
 
+  body {
+    overscroll-behavior: none;
+  }
+
   .hidden {
     display: none !important;
   }
@@ -81,6 +85,9 @@
     width: 100%;
     height: 100%;
     background: #000;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   #back-btn {
@@ -462,6 +469,7 @@ feeling a real connection to this place.`;
     countdownOverlay.classList.add('hidden');
     prompterScreen.classList.add('hidden');
     editScreen.classList.remove('hidden');
+    releaseWakeLock();
   }
 
   function showPrompter() {
@@ -469,6 +477,7 @@ feeling a real connection to this place.`;
     scriptContent.style.transform = 'translateY(0)';
     editScreen.classList.add('hidden');
     prompterScreen.classList.remove('hidden');
+    acquireWakeLock();
   }
 
   function renderScript(text) {
@@ -594,6 +603,30 @@ feeling a real connection to this place.`;
       e.preventDefault();
       restart();
     }
+  });
+
+  let wakeLock = null;
+  async function acquireWakeLock() {
+    try {
+      if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+    } catch (e) { /* 非対応・拒否時は何もしない */ }
+  }
+  function releaseWakeLock() { if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; } }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !prompterScreen.classList.contains('hidden')) acquireWakeLock();
+  });
+
+  document.addEventListener('dblclick', function (e) {
+    e.preventDefault();
+  });
+
+  window.addEventListener('resize', function () {
+    if (prompterScreen.classList.contains('hidden')) return;
+    state.scrollY = Math.min(state.scrollY, maxScroll());
+    scriptContent.style.transform = `translateY(${-state.scrollY}px)`;
+    cacheLineOffsets();
+    updateMarkerHighlight();
+    updateProgress();
   });
 </script>
 
